@@ -15,7 +15,7 @@
   <img src="assets/intro.png" width="100%" />
 </p>
 
-**TL;DR: Our ICML paper proposed Explanation Ensemble (EE), which improves the trustworthiness of SI-GNNs by aggregating multiple explanations from independently trained models. While effective, it has high computational cost during inference (limits its deployment) and is incompatible with single-explanation metrics such as FID (limits its evaluation). In this extension, we propose Consensus Distillation (CD), which distills the ensemble’s consensus knowledge into a single model, retaining EE’s capability while addressing its limitations.
+TL;DR: Our ICML paper proposed Explanation Ensemble (EE), which improves the trustworthiness of SI-GNNs by aggregating multiple explanations from independently trained models. While effective, it has high computational cost during inference (limits its deployment) and is incompatible with single-explanation metrics such as FID (limits its evaluation). In this extension, we propose Consensus Distillation (CD), which distills the ensemble’s consensus knowledge into a single model, retaining EE’s capability while addressing its limitations.
 
 ---
 
