@@ -859,74 +859,6 @@ class ATTCDTrainer(BaseTrainer):
                 self.lowest_valid_loss = valid_loss
             # print(self.max_std)
 
-    def train(self):
-        self.writer = SummaryWriter(
-            f"./outputs/logs/{self.method_name}/{self.cfg.dataset_name}")
-
-        # for model_index in self.index_list:
-        for model_index in range(5):
-            path = f'./outputs/archived_checkpoints/{self.method_name[:-3]}_{self.cfg.dataset_name}_{model_index}.pth'
-            new_model = copy.deepcopy(self.model)
-            new_explainer = copy.deepcopy(self.explainer)
-            state = torch.load(path, map_location=self.device)
-            new_model.load_state_dict(state['model_state_dict'])
-            new_explainer.load_state_dict(state['explainer_state_dict'])
-            new_model.eval()
-            new_explainer.eval()
-            self.ee_models.append(new_model)
-            self.ee_explainers.append(new_explainer)
-
-        from datetime import datetime
-        self.timestamp = datetime.timestamp(datetime.now())
-
-        for e in range(self.cfg.epochs):
-            train_batch_loss_list = []
-            accumulated_info = defaultdict(list)
-            self.model.train()
-            self.explainer.train()
-            self.r = self.get_r(e)
-
-            all_att, all_exp = [], []
-
-            for data in self.dataloader['train']:
-                data = self.process_data(data=data, use_edge_attr=self.cfg.use_edge_attr).to(self.device)
-                train_batch_loss, train_batch_info = self._train_batch(data, is_test=True)
-
-                att = train_batch_info['edge_att'].data.cpu()
-                exp = train_batch_info['exp_label'].data.cpu()
-                all_att.append(att)
-                all_exp.append(exp)
-
-                train_batch_loss_list.append(train_batch_loss)
-                for key, value in train_batch_info.items():
-                    accumulated_info[key].append(value)
-            train_loss = torch.FloatTensor(train_batch_loss_list).mean().item()
-            self.writer.add_scalar(f'train_loss/{self.timestamp}', train_loss, e)
-
-            train_metrics = self.calculate_metrics(accumulated_info)
-
-            all_att = torch.cat(all_att)
-            all_exp = torch.cat(all_exp)
-            bkg_att_weights, signal_att_weights = all_att, all_att
-            if np.unique(all_exp).shape[0] > 1:
-                bkg_att_weights = all_att[all_exp == 0]
-                signal_att_weights = all_att[all_exp == 1]
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/bkg_att_weights',
-                                      bkg_att_weights, e)
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/signal_att_weights',
-                                      signal_att_weights, e)
-
-            valid_loss, valid_metrics = self.valid(e)
-            print(f"epoch: {e}, "
-                  f"train loss: {train_loss:.4f}, train acc {train_metrics['acc']:.4f}, "
-                  f"valid loss: {valid_loss:.4f}, valid acc {valid_metrics['acc']:.4f}")
-            if (e > 10) and (
-                    (valid_metrics['acc'] > self.best_valid_score) or
-                    (valid_metrics['acc'] == self.best_valid_score and valid_loss < self.lowest_valid_loss)):
-                self.save_model(self.checkpoints_path)
-                self.best_valid_score = valid_metrics['acc']
-                self.lowest_valid_loss = valid_loss
-
     @torch.inference_mode()
     def valid(self, e=None):
         valid_batch_loss_list = []
@@ -1629,62 +1561,6 @@ class SIZECDTrainer(BaseTrainer):
                 self.best_valid_score = valid_metrics['acc']
                 self.lowest_valid_loss = valid_loss
 
-    def train(self):
-        self.writer = SummaryWriter(
-            f"./outputs/logs/{self.method_name}/{self.cfg.dataset_name}")
-
-        from datetime import datetime
-        self.timestamp = datetime.timestamp(datetime.now())
-
-        for e in range(self.cfg.epochs):
-            train_batch_loss_list = []
-            accumulated_info = defaultdict(list)
-            self.model.train()
-            self.explainer.train()
-            self.r = self.get_r(e)
-            self.c = self.get_sparsity_c(e)
-
-            all_att, all_exp = [], []
-
-            for data in self.dataloader['train']:
-                data = self.process_data(data=data, use_edge_attr=self.cfg.use_edge_attr).to(self.device)
-                train_batch_loss, train_batch_info = self._train_batch(data, is_test=True)
-
-                att = train_batch_info['edge_att'].data.cpu()
-                exp = train_batch_info['exp_label'].data.cpu()
-                all_att.append(att)
-                all_exp.append(exp)
-
-                train_batch_loss_list.append(train_batch_loss)
-                for key, value in train_batch_info.items():
-                    accumulated_info[key].append(value)
-            train_loss = torch.FloatTensor(train_batch_loss_list).mean().item()
-            self.writer.add_scalar(f'train_loss/{self.timestamp}', train_loss, e)
-
-            train_metrics = self.calculate_metrics(accumulated_info)
-
-            all_att = torch.cat(all_att)
-            all_exp = torch.cat(all_exp)
-            bkg_att_weights, signal_att_weights = all_att, all_att
-            if np.unique(all_exp).shape[0] > 1:
-                bkg_att_weights = all_att[all_exp == 0]
-                signal_att_weights = all_att[all_exp == 1]
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/bkg_att_weights',
-                                      bkg_att_weights, e)
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/signal_att_weights',
-                                      signal_att_weights, e)
-
-            valid_loss, valid_metrics = self.valid(e)
-            print(f"epoch: {e}, "
-                  f"train loss: {train_loss:.4f}, train acc {train_metrics['acc']:.4f}, "
-                  f"valid loss: {valid_loss:.4f}, valid acc {valid_metrics['acc']:.4f}")
-            if (self.c == self.sparsity_mask_coef) and (e > 10) and (
-                    (valid_metrics['acc'] > self.best_valid_score) or
-                    (valid_metrics['acc'] == self.best_valid_score and valid_loss < self.lowest_valid_loss)):
-                self.save_model(self.checkpoints_path)
-                self.best_valid_score = valid_metrics['acc']
-                self.lowest_valid_loss = valid_loss
-
     @torch.inference_mode()
     def valid(self, e=None):
         valid_batch_loss_list = []
@@ -2349,74 +2225,6 @@ class GSATCDTrainer(BaseTrainer):
                 self.best_valid_score = valid_metrics['acc']
                 self.lowest_valid_loss = valid_loss
             # print(self.max_std)
-
-    def train(self):
-        self.writer = SummaryWriter(
-            f"./outputs/logs/{self.method_name}/{self.cfg.dataset_name}")
-        # self.index_list = random.sample(range(10), 10)
-        # for model_index in self.index_list:
-        for model_index in range(50):
-            path = f'./outputs/checkpoints/{self.method_name[:-3]}_{self.cfg.dataset_name}_{model_index}.pth'
-            new_model = copy.deepcopy(self.model)
-            new_explainer = copy.deepcopy(self.explainer)
-            state = torch.load(path, map_location=self.device)
-            new_model.load_state_dict(state['model_state_dict'])
-            new_explainer.load_state_dict(state['explainer_state_dict'])
-            new_model.eval()
-            new_explainer.eval()
-            self.ee_models.append(new_model)
-            self.ee_explainers.append(new_explainer)
-
-        from datetime import datetime
-        self.timestamp = datetime.timestamp(datetime.now())
-
-        for e in range(self.cfg.epochs):
-            train_batch_loss_list = []
-            accumulated_info = defaultdict(list)
-            self.model.train()
-            self.explainer.train()
-            self.r = self.get_r(e)
-
-            all_att, all_exp = [], []
-
-            for data in self.dataloader['train']:
-                data = self.process_data(data=data, use_edge_attr=self.cfg.use_edge_attr).to(self.device)
-                train_batch_loss, train_batch_info = self._train_batch(data, is_test=True)
-
-                att = train_batch_info['edge_att'].data.cpu()
-                exp = train_batch_info['exp_label'].data.cpu()
-                all_att.append(att)
-                all_exp.append(exp)
-
-                train_batch_loss_list.append(train_batch_loss)
-                for key, value in train_batch_info.items():
-                    accumulated_info[key].append(value)
-            train_loss = torch.FloatTensor(train_batch_loss_list).mean().item()
-            self.writer.add_scalar(f'train_loss/{self.timestamp}', train_loss, e)
-
-            train_metrics = self.calculate_metrics(accumulated_info)
-
-            all_att = torch.cat(all_att)
-            all_exp = torch.cat(all_exp)
-            bkg_att_weights, signal_att_weights = all_att, all_att
-            if np.unique(all_exp).shape[0] > 1:
-                bkg_att_weights = all_att[all_exp == 0]
-                signal_att_weights = all_att[all_exp == 1]
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/bkg_att_weights',
-                                      bkg_att_weights, e)
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/signal_att_weights',
-                                      signal_att_weights, e)
-
-            valid_loss, valid_metrics = self.valid(e)
-            print(f"epoch: {e}, "
-                  f"train loss: {train_loss:.4f}, train acc {train_metrics['acc']:.4f}, "
-                  f"valid loss: {valid_loss:.4f}, valid acc {valid_metrics['acc']:.4f}")
-            if (self.r == self.final_r) and (e > 10) and (
-                    (valid_metrics['acc'] > self.best_valid_score) or
-                    (valid_metrics['acc'] == self.best_valid_score and valid_loss < self.lowest_valid_loss)):
-                self.save_model(self.checkpoints_path)
-                self.best_valid_score = valid_metrics['acc']
-                self.lowest_valid_loss = valid_loss
 
     @torch.inference_mode()
     def valid(self, e=None):
@@ -3166,60 +2974,6 @@ class CALCDTrainer(BaseTrainer):
                 self.save_model(self.checkpoints_path)
             self.best_valid_score = valid_metrics['acc']
             self.lowest_valid_loss = valid_loss
-
-    def train(self):
-        self.writer = SummaryWriter(
-            f"./outputs/logs/{self.method_name}/{self.cfg.dataset_name}")
-
-        from datetime import datetime
-        self.timestamp = datetime.timestamp(datetime.now())
-
-        for e in range(self.cfg.epochs):
-            train_batch_loss_list = []
-            accumulated_info = defaultdict(list)
-            self.model.train()
-            self.explainer.train()
-            self.r = self.get_r(e)
-            all_att, all_exp = [], []
-
-            for data in self.dataloader['train']:
-                data = self.process_data(data=data, use_edge_attr=self.cfg.use_edge_attr).to(self.device)
-                train_batch_loss, train_batch_info = self._train_batch(data, is_test=True)
-
-                att = train_batch_info['edge_att'].data.cpu()
-                exp = train_batch_info['exp_label'].data.cpu()
-                all_att.append(att)
-                all_exp.append(exp)
-
-                train_batch_loss_list.append(train_batch_loss)
-                for key, value in train_batch_info.items():
-                    accumulated_info[key].append(value)
-            train_loss = torch.FloatTensor(train_batch_loss_list).mean().item()
-            self.writer.add_scalar(f'train_loss/{self.timestamp}', train_loss, e)
-
-            train_metrics = self.calculate_metrics(accumulated_info)
-
-            all_att = torch.cat(all_att)
-            all_exp = torch.cat(all_exp)
-            bkg_att_weights, signal_att_weights = all_att, all_att
-            if np.unique(all_exp).shape[0] > 1:
-                bkg_att_weights = all_att[all_exp == 0]
-                signal_att_weights = all_att[all_exp == 1]
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/bkg_att_weights',
-                                      bkg_att_weights, e)
-            self.writer.add_histogram(f'train_histogram/{self.timestamp}/signal_att_weights',
-                                      signal_att_weights, e)
-
-            valid_loss, valid_metrics = self.valid(e)
-            print(f"epoch: {e}, "
-                  f"train loss: {train_loss:.4f}, train acc {train_metrics['acc']:.4f}, "
-                  f"valid loss: {valid_loss:.4f}, valid acc {valid_metrics['acc']:.4f}")
-            if (e > 10) and (
-                    (valid_metrics['acc'] > self.best_valid_score) or
-                    (valid_metrics['acc'] == self.best_valid_score and valid_loss < self.lowest_valid_loss)):
-                self.save_model(self.checkpoints_path)
-                self.best_valid_score = valid_metrics['acc']
-                self.lowest_valid_loss = valid_loss
 
     @torch.inference_mode()
     def valid(self, e=None):
