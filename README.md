@@ -74,11 +74,7 @@ python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd
 ### 2. Evaluate redundancy (SHD and AUC)
 
 ```bash
-python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd --calculate_shd
-```
-
-```bash
-python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd --test_by_sample_ensemble
+python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd --calculate_all_metrics
 ```
 
 ---
@@ -90,8 +86,7 @@ You can download them from the [Releases](https://github.com/ICDM-UESTC/Consensu
 
 To use the checkpoint, place it in the `outputs/checkpoints/` folder and run:
 ```bash
-python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd --calculate_shd
-python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd --test_by_sample_ensemble
+python main.py --run_time 10 --dataset ba_2motifs --method gsat_cd --calculate_all_metrics
 ```
 
 ---
