@@ -2,8 +2,8 @@
 
 **💻 Official implementation of our TPAMI submission (extension of ICML 2025): Consensus-Driven Distillation for Trustworthy Explanations in Self-Interpretable GNNs**
 
-> 🧠 Authors: [Wenxin Tai](https://scholar.google.com/citations?user=YyxocAIAAAAJ&hl=en), [Fan Zhou](https://scholar.google.com/citations?user=Ihj2Rw8AAAAJ&hl=en), [Ting Zhong](https://scholar.google.com/citations?user=Mdr0XDkAAAAJ&hl=en), [Goce Trajcevski](https://scholar.google.com/citations?user=Avus2kcAAAAJ&hl=en), [Kunpeng Zhang](https://scholar.google.com/citations?user=rnpemAoAAAAJ&hl=en&oi=ao), [Jing Gao](https://scholar.google.com/citations?user=Ftj1h4cAAAAJ&hl=en&oi=ao), [Philip S. Yu](https://scholar.google.com/citations?user=D0lL1r0AAAAJ&hl=en&oi=ao)   
-> 📍 Institutions: University of Electronic Science and Technology of China & Iowa State University & University of Maryland, College Park & Purdue University & University of Illinois, Chicago.  
+> 🧠 Authors: [Wenxin Tai](https://scholar.google.com/citations?user=YyxocAIAAAAJ&hl=en), [Fan Zhou](https://scholar.google.com/citations?user=Ihj2Rw8AAAAJ&hl=en), [Ting Zhong](https://scholar.google.com/citations?user=Mdr0XDkAAAAJ&hl=en), [Goce Trajcevski](https://scholar.google.com/citations?user=Avus2kcAAAAJ&hl=en), [Kunpeng Zhang](https://scholar.google.com/citations?user=rnpemAoAAAAJ&hl=en&oi=ao), [Philip S. Yu](https://scholar.google.com/citations?user=D0lL1r0AAAAJ&hl=en&oi=ao)   
+> 📍 Institutions: University of Electronic Science and Technology of China & Iowa State University & University of Maryland, College Park & University of Illinois, Chicago.  
 > 🔗 [Paper Link](https://icml.cc/virtual/2025/poster/44426)
 > 🤖 This repository is maintained by [ICDM Lab](https://www.icdmlab.com/)
 
