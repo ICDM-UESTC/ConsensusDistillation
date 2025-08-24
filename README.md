@@ -3,7 +3,7 @@
 **💻 Official implementation of our TPAMI submission (extension of ICML 2025): Consensus-Driven Distillation for Trustworthy Explanations in Self-Interpretable GNNs**
 
 > 🧠 Authors: [Wenxin Tai](https://scholar.google.com/citations?user=YyxocAIAAAAJ), [Fan Zhou](https://scholar.google.com/citations?user=Ihj2Rw8AAAAJ), [Steve Azzolin](https://scholar.google.com/citations?hl=it&user=8UcnWPIAAAAJ), [Ting Zhong](https://scholar.google.com/citations?user=Mdr0XDkAAAAJ), [Goce Trajcevski](https://scholar.google.com/citations?user=Avus2kcAAAAJ), [Kunpeng Zhang](https://scholar.google.com/citations?user=rnpemAoAAAAJ), [Philip S. Yu](https://scholar.google.com/citations?user=D0lL1r0AAAAJ)   
-> 📍 Institutions: University of Electronic Science and Technology of China & Iowa State University & University of Maryland, College Park & University of Illinois, Chicago.  
+> 📍 Institutions: University of Electronic Science and Technology of China & University of Trento & Iowa State University & University of Maryland, College Park & University of Illinois, Chicago.  
 > 🔗 [Paper Link](https://icml.cc/virtual/2025/poster/44426)
 > 🤖 This repository is maintained by [ICDM Lab](https://www.icdmlab.com/)
 
