@@ -1791,9 +1791,7 @@ class GSATCDTrainer(BaseTrainer):
         return preds
 
     def get_r(self, current_epoch):
-        r = self.init_r - current_epoch // self.decay_interval * self.decay_r
-        if r < self.final_r:
-            r = self.final_r
+        r = self.final_r
         return r
 
     def save_model(self, path):
