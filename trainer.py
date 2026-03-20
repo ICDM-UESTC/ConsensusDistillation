@@ -2711,8 +2711,8 @@ class CALCDTrainer(BaseTrainer):
             if (valid_metrics['acc'] > self.best_valid_score) or (
                     valid_metrics['acc'] == self.best_valid_score and valid_loss < self.lowest_valid_loss):
                 self.save_model(self.checkpoints_path)
-            self.best_valid_score = valid_metrics['acc']
-            self.lowest_valid_loss = valid_loss
+                self.best_valid_score = valid_metrics['acc']
+                self.lowest_valid_loss = valid_loss
 
     @torch.inference_mode()
     def valid(self, e=None):
