@@ -70,7 +70,7 @@ class BaseTrainer(object):
 
     @torch.inference_mode()
     def calculate_shd_auc_fid_acc(self, method_name, ensemble_numbers=[0]):
-        assert self.cfg.multi_label is False  # only support binary classification now
+        assert self.cfg.multi_label is False
         assert len(ensemble_numbers) % 2 == 0
 
         ori_data = []
@@ -78,22 +78,33 @@ class BaseTrainer(object):
             ori_data.append(copy.deepcopy(data))
 
         for model_index in ensemble_numbers:
-            new_checkpoints_path = f'{self.checkpoints_path[:-4]}_{model_index}.pth'  # att_ba_2motifs.pth -> att_ba_2motifs_0.pth
+            new_checkpoints_path = f'{self.checkpoints_path[:-4]}_{model_index}.pth'
             self.load_model(new_checkpoints_path)
             self.model.eval()
             self.explainer.eval()
+
             for data_index, data in enumerate(self.dataloader['test_by_sample']):
                 data = self.process_data(data=data, use_edge_attr=self.cfg.use_edge_attr).to(self.device)
-                emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
-                                         batch=data.batch)
-                att = self.concrete_sample(self.explainer(emb, data.edge_index, data.batch), training=False)
-                edge_att = self.process_att_to_edge_att(data, att)
-                ori_data[data_index][f'edge_att_{model_index}'] = edge_att.squeeze()  # save generated exp for auc
 
+                emb = self.model.get_emb(x=data.x, edge_index=data.edge_index,
+                                         edge_attr=data.edge_attr, batch=data.batch)
+                att = self.concrete_sample(self.explainer(emb, data.edge_index, data.batch), training=False)
+                edge_att = self.process_att_to_edge_att(data, att)  # Gs
+                ori_data[data_index][f'edge_att_{model_index}'] = edge_att.squeeze()
+
+                '''for fid-'''
                 minus_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index,
                                                edge_attr=data.edge_attr, batch=data.batch, edge_atten=edge_att)
                 minus_att = self.concrete_sample(self.explainer(minus_emb, data.edge_index, data.batch), training=False)
-                minus_edge_att = self.process_att_to_edge_att(data, minus_att)
+                minus_edge_att_final = self.process_att_to_edge_att(data, minus_att)
+
+                '''for fid+'''
+                edge_att_c = 1 - edge_att  # Gc\s
+                plus_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index,
+                                              edge_attr=data.edge_attr, batch=data.batch, edge_atten=edge_att_c)
+                plus_att = self.concrete_sample(self.explainer(plus_emb, data.edge_index, data.batch), training=False)
+                plus_edge_att_final = self.process_att_to_edge_att(data, plus_att)
+
                 if 'cal' in method_name:
                     s_edge_att = 1 - edge_att
                     c_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
@@ -102,121 +113,157 @@ class BaseTrainer(object):
                     s_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
                                                batch=data.batch,
                                                edge_atten=s_edge_att)
-                    csi_emb = s_emb + c_emb
+                    csi_emb = c_emb + s_emb
                     logits = self.model.get_pred_from_csi_emb(emb=csi_emb, batch=data.batch)  # [1, 1]
+
                     '''for fid-'''
-                    minus_s_edge_att = 1 - minus_edge_att
+                    # minus_s_edge_att_final = 1 - minus_edge_att_final
+                    minus_s_edge_att_final = (edge_att - minus_edge_att_final).clamp(min=0)
                     minus_c_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
                                                      batch=data.batch,
-                                                     edge_atten=minus_edge_att)
+                                                     edge_atten=minus_edge_att_final)
                     minus_s_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
                                                      batch=data.batch,
-                                                     edge_atten=minus_s_edge_att)
+                                                     edge_atten=minus_s_edge_att_final)
                     minus_csi_emb = minus_s_emb + minus_c_emb
                     logits_minus = self.model.get_pred_from_csi_emb(emb=minus_csi_emb, batch=data.batch)
+
+                    '''for fid+'''
+                    # plus_s_edge_att_final = 1 - plus_edge_att_final
+                    plus_s_edge_att_final = (edge_att_c - plus_edge_att_final).clamp(min=0)
+                    plus_c_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
+                                                    batch=data.batch,
+                                                    edge_atten=plus_edge_att_final)
+                    plus_s_emb = self.model.get_emb(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr,
+                                                    batch=data.batch,
+                                                    edge_atten=plus_s_edge_att_final)
+                    plus_csi_emb = plus_s_emb + plus_c_emb
+                    logits_plus = self.model.get_pred_from_csi_emb(emb=plus_csi_emb, batch=data.batch)
                 else:
                     logits = self.model(x=data.x, edge_index=data.edge_index,
                                         edge_attr=data.edge_attr, batch=data.batch, edge_atten=edge_att)
                     '''for fid-'''
                     logits_minus = self.model(x=data.x, edge_index=data.edge_index,
-                                              edge_attr=data.edge_attr, batch=data.batch, edge_atten=minus_edge_att)
+                                              edge_attr=data.edge_attr, batch=data.batch,
+                                              edge_atten=minus_edge_att_final)
+                    '''for fid+'''
+                    logits_plus = self.model(x=data.x, edge_index=data.edge_index,
+                                             edge_attr=data.edge_attr, batch=data.batch, edge_atten=plus_edge_att_final)
 
                 ori_data[data_index][f'y_hat_{model_index}'] = logits.sigmoid()  # binary classification
                 ori_data[data_index][f'y_hat_minus_{model_index}'] = logits_minus.sigmoid()  # binary classification
+                ori_data[data_index][f'y_hat_plus_{model_index}'] = logits_plus.sigmoid()  # binary classification
 
-        '''calculate fid'''
-        fid_scores = []
+        # ====== SPA ======
+        n = len(ensemble_numbers)
+        all_model_spa_list = []
+        for model_index in range(n):
+            model_spa_list = []
+            for data in ori_data:
+                model_spa_list.append(torch.mean(data[f'edge_att_{model_index}']).cpu().data)
+            all_model_spa_list.append(np.mean(model_spa_list))
+        spa_mean = np.mean(all_model_spa_list)
+        spa_std = np.std(all_model_spa_list)
+
+        '''calculate fid-'''
+        fid_scores_minus = []
         for model_index in range(len(ensemble_numbers)):
-            fid_model_scores = []
+            fid_model_scores_minus = []
             for data in ori_data:
                 logits = data[f'y_hat_{model_index}'].squeeze()
                 pred_ori = (logits > 0.5).int()
                 logits_minus = data[f'y_hat_minus_{model_index}'].squeeze()
                 pred_minus = (logits_minus > 0.5).int()
                 score = torch.abs(pred_ori - pred_minus).item()
-                fid_model_scores.append(score)
-            fid_scores.append(np.mean(fid_model_scores))
-        fid_mean, fid_std = np.mean(fid_scores), np.std(fid_scores)
+                fid_model_scores_minus.append(score)
+            fid_scores_minus.append(np.mean(fid_model_scores_minus))
+        fid_minus_mean, fid_minus_std = np.mean(fid_scores_minus), np.std(fid_scores_minus)
 
-        '''calculate shd (before & after EE)'''
-        # before EE
+        '''calculate fid+'''
+        fid_scores_plus = []
+        for model_index in range(len(ensemble_numbers)):
+            fid_model_scores_plus = []
+            for data in ori_data:
+                logits = data[f'y_hat_{model_index}'].squeeze()
+                pred_ori = (logits > 0.5).int()
+                logits_plus = data[f'y_hat_plus_{model_index}'].squeeze()
+                pred_plus = (logits_plus > 0.5).int()
+                score = torch.abs(pred_ori - pred_plus).item()
+                fid_model_scores_plus.append(score)
+            fid_scores_plus.append(np.mean(fid_model_scores_plus))
+        fid_plus_mean, fid_plus_std = np.mean(fid_scores_plus), np.std(fid_scores_plus)
+
+        '''calculate fid'''
+        arr_plus = np.asarray(fid_scores_plus, dtype=float)
+        arr_minus = np.asarray(fid_scores_minus, dtype=float)
+
+        fid_per_model = (arr_plus + (1.0 - arr_minus)) / 2
+
+        fid_mean = float(fid_per_model.mean())
+        fid_std = float(fid_per_model.std())
+        # ------------------------------------------------
+
         n = len(ensemble_numbers)
+
         all_scores_dict = defaultdict(list)
         for data in ori_data:
             edge_atts = [data[f'edge_att_{i}'] for i in range(n)]
             combinations_list = list(combinations(range(n), 1))
             for pair in combinations(combinations_list, 2):
                 if set(pair[0]).isdisjoint(pair[1]):
-                    edge_atts_first = torch.stack([edge_atts[i] for i in pair[0]]).mean(dim=0)  # [edge_num]
+                    edge_atts_first = torch.stack([edge_atts[i] for i in pair[0]]).mean(dim=0)
                     edge_atts_second = torch.stack([edge_atts[i] for i in pair[1]]).mean(dim=0)
                     mae_distance = torch.abs(edge_atts_first - edge_atts_second).mean().item()
-                    score = mae_distance
-                    all_scores_dict[f'{pair[0]}_{pair[1]}'].append(score)
-        shd_ori_scores = []
-        for key, item in all_scores_dict.items():
-            shd_ori_scores.append(np.mean(item))
+                    all_scores_dict[f'{pair[0]}_{pair[1]}'].append(mae_distance)
+        shd_ori_scores = [np.mean(v) for v in all_scores_dict.values()]
         shd_ori_mean, shd_ori_std = np.mean(shd_ori_scores), np.std(shd_ori_scores)
 
-        # after EE
+        # after EE：
         all_scores_dict = defaultdict(list)
         for data in ori_data:
             edge_atts = [data[f'edge_att_{i}'] for i in range(n)]
             combinations_list = list(combinations(range(n), int(n / 2)))
             for pair in combinations(combinations_list, 2):
                 if set(pair[0]).isdisjoint(pair[1]):
-                    edge_atts_first = torch.stack([edge_atts[i] for i in pair[0]]).mean(dim=0)  # [edge_num]
+                    edge_atts_first = torch.stack([edge_atts[i] for i in pair[0]]).mean(dim=0)
                     edge_atts_second = torch.stack([edge_atts[i] for i in pair[1]]).mean(dim=0)
                     mae_distance = torch.abs(edge_atts_first - edge_atts_second).mean().item()
-                    score = mae_distance
-                    all_scores_dict[f'{pair[0]}_{pair[1]}'].append(score)
-        shd_ee_scores = []
-        for key, item in all_scores_dict.items():
-            shd_ee_scores.append(np.mean(item))
+                    all_scores_dict[f'{pair[0]}_{pair[1]}'].append(mae_distance)
+        shd_ee_scores = [np.mean(v) for v in all_scores_dict.values()]
         shd_ee_mean, shd_ee_std = np.mean(shd_ee_scores), np.std(shd_ee_scores)
 
-        '''calculate auc'''
-        # before EE
+        # ====== AUC ======
+        # before EE：
         model_auc_list = []
-        # all_scores_dict = defaultdict(list)  # paper figure (instance visualization)
         for model_index in range(n):
-            edge_att_list = []
-            exp_label_list = []
+            edge_att_list, exp_label_list = [], []
             for data in ori_data:
-                edge_att = data[f'edge_att_{model_index}']
-                exp_label = data.edge_label.data
-                edge_att_list.append(edge_att)
-                exp_label_list.append(exp_label)
-                # score = roc_auc_score(exp_label.cpu().numpy(), edge_att.cpu().numpy())  # for instance visualization
-                # all_scores_dict[f'{model_index}'].append(score)
+                edge_att_list.append(data[f'edge_att_{model_index}'])
+                exp_label_list.append(data.edge_label.data)
             model_auc = roc_auc_score(torch.cat(exp_label_list).cpu(), torch.cat(edge_att_list).cpu())
             model_auc_list.append(model_auc)
         auc_ori_mean, auc_ori_std = np.mean(model_auc_list), np.std(model_auc_list)
 
-        # after EE
+        # after EE：
         model_auc_list = []
-        # all_scores_dict = defaultdict(list)  # paper figure (instance visualization)
         combinations_list = list(combinations(range(n), int(n / 2)))
         for pair in combinations_list:
-            edge_att_list = []
-            exp_label_list = []
+            edge_att_list, exp_label_list = [], []
             for data in ori_data:
                 edge_atts = [data[f'edge_att_{i}'] for i in range(n)]
                 edge_att = torch.stack([edge_atts[i] for i in pair]).mean(dim=0)
-                exp_label = data.edge_label.data
                 edge_att_list.append(edge_att)
-                exp_label_list.append(exp_label)
-                # score = roc_auc_score(exp_label.cpu().numpy(), edge_att.cpu().numpy())  # for instance visualization
-                # all_scores_dict[f'{pair}'].append(score)
+                exp_label_list.append(data.edge_label.data)
             model_auc = roc_auc_score(torch.cat(exp_label_list).cpu(), torch.cat(edge_att_list).cpu())
             model_auc_list.append(model_auc)
         auc_ee_mean, auc_ee_std = np.mean(model_auc_list), np.std(model_auc_list)
+        # auc_ori_mean, auc_ori_std, auc_ee_std, auc_ee_mean = 0.0, 0.0, 0.0, 0.0  # for no-gt-dataset (e.g., aids)
 
-        '''acc'''
-        # before EE
+        # ====== ACC ======
+        # before EE：
         model_acc_list = []
         for model_index in range(n):
-            y_hat_list = []
-            y_list = []
+            y_hat_list, y_list = [], []
             for data in ori_data:
                 y_hat = data[f'y_hat_{model_index}'].squeeze().item()
                 y = data.y.squeeze().item()
@@ -225,12 +272,12 @@ class BaseTrainer(object):
             acc = accuracy_score(y_list, y_hat_list)
             model_acc_list.append(acc)
         acc_ori_mean, acc_ori_std = np.mean(model_acc_list), np.std(model_acc_list)
-        # after EE
+
+        # after EE：
         model_acc_list = []
         combinations_list = list(combinations(range(n), int(n / 2)))
         for pair in combinations_list:
-            y_hat_list = []
-            y_list = []
+            y_hat_list, y_list = [], []
             for data in ori_data:
                 y_hat = torch.stack([data[f'y_hat_{i}'] for i in pair]).mean(dim=0).squeeze().item()
                 y = data.y.squeeze().item()
@@ -245,7 +292,10 @@ class BaseTrainer(object):
         print(f"shd: {shd_ori_mean:.4f}±{shd_ori_std:.4f}\n"
               f"auc: {auc_ori_mean:.4f}±{auc_ori_std:.4f}\n"
               f"acc: {acc_ori_mean:.4f}±{acc_ori_std:.4f}\n"
-              f"fid-: {fid_mean:.4f}±{fid_std:.4f}")
+              f"fid-: {fid_minus_mean:.4f}±{fid_minus_std:.4f}\n"
+              f"fid+: {fid_plus_mean:.4f}±{fid_plus_std:.4f}\n"
+              f"fid: {fid_mean:.4f}±{fid_std:.4f}\n"
+              f"spa:{spa_mean:.4f}±{spa_std:.4f}")
         print("------------------------------------------------------------------------------------")
         print("after ensemble (5 models):")
         print(f"shd: {shd_ee_mean:.4f}±{shd_ee_std:.4f}\n"
